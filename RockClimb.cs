@@ -33,19 +33,26 @@ public class RockClimb : MonoBehaviour {
     public ChildTrigger R_childTrigger;
     // Use this for initialization
 
-    List<Vector3> detectionPoints = new List<Vector3>(); // store lots of point for the list
+  public Dictionary<Vector3,RaycastHit> detectionPoints = new Dictionary<Vector3, RaycastHit>(); // store lots of point for the list
+    Vector3[] checkpoints;
+    RaycastHit[] checkHits;
+
+    Vector3 theClosestPoint;
+    RaycastHit theClosestHit;
 
     void Start() {
 
 
     }
     // Update is called once per frame
-    void Update()
+    void FixedUpdate()
     {
         float horizontal_value = Input.GetAxis("Horizontal") * Time.deltaTime * movingSpeed;
         float vertical_value = Input.GetAxis("Vertical") * Time.deltaTime * movingSpeed;
 
         character.transform.Translate(horizontal_value, vertical_value, 0);
+        currentPosition = character.transform.position;
+
 
         t += Time.deltaTime;
 
@@ -63,18 +70,20 @@ public class RockClimb : MonoBehaviour {
             isCountDown = false;
         }// Timer
 
+        if (isClimbing) {
+  
+        }
+        if (Input.GetMouseButton(0)) {
+            detectWall();
 
-        if (Input.GetMouseButton(0))
-        {
-            initTargetTheWall(); // first, detect the frontside of character
-            isCountDown = true;
+            storePoint();
 
-            if (isReadyForClimb &&isClimbing)
-            {
-                detectWall();
-            }
+            //initTargetTheWall(); // first, detect the frontside of character
+            GetClimbPosition();
+            Debug.Log(theClosestPoint);
 
         }
+
     }
 
     void initTargetTheWall() {
@@ -88,7 +97,7 @@ public class RockClimb : MonoBehaviour {
         {
             isClimbing = true;
             //   character.transform.position = Vector3.Lerp(currentPosition, targetPosition, 0.5f);
-            GetClimbPosition(hit); // get the position for climbing
+           // GetClimbPosition(hit); // get the position for climbing
             Debug.DrawRay(ray.origin, character.transform.TransformDirection(Vector3.forward) * rayDistance, Color.yellow);
         }
         else
@@ -97,31 +106,71 @@ public class RockClimb : MonoBehaviour {
             Debug.DrawRay(ray.origin, character.transform.TransformDirection(Vector3.forward) * rayDistance, Color.red);
         }
     }
-
-    void detectWall()
+    void detectWall() // detect the hit point (left, right , vertical 
     {
-        RaycastHit l_raycastHit, r_raycastHit, v_raycastHit;
+        detectionPoints = new Dictionary<Vector3, RaycastHit>(); // reset the list
+        RaycastHit l_raycastHit, r_raycastHit, u_raycastHit;
         Vector3 l = character.transform.TransformDirection(Vector3.left);
         Vector3 r = character.transform.TransformDirection(Vector3.right);
-        Vector3 v = character.transform.TransformDirection(Vector3.up);
+        Vector3 u = character.transform.TransformDirection(Vector3.up);
+      
 
         Debug.DrawRay(rayOrigin.transform.position, l * rayDistance, Color.green);
         Debug.DrawRay(rayOrigin.transform.position, r * rayDistance, Color.green);
-        Debug.DrawRay(rayOrigin.transform.position, v * rayDistance, Color.green);
+        Debug.DrawRay(rayOrigin.transform.position, u * rayDistance, Color.green);
+
 
         if (Physics.Raycast(rayOrigin.transform.position, l, out l_raycastHit, rayDistance))// left 
         {
-            Debug.Log(l_raycastHit.collider.name);
-            GetClimbPosition(l_raycastHit);
+            //Debug.Log(l_raycastHit.collider.name);
+            detectionPoints.Add(l_raycastHit.point, l_raycastHit);
+          //  GetClimbPosition(l_raycastHit);
         }
         if (Physics.Raycast(rayOrigin.transform.position, r, out r_raycastHit, rayDistance))// right
         {
-            Debug.Log(r_raycastHit.collider.name);
-            GetClimbPosition(r_raycastHit);
+            detectionPoints.Add(r_raycastHit.point, r_raycastHit);
+            // GetClimbPosition(r_raycastHit);
         }
-        if (Physics.Raycast(rayOrigin.transform.position, v, out v_raycastHit, rayDistance)) //  vertical
+        if (Physics.Raycast(rayOrigin.transform.position, u, out u_raycastHit, rayDistance)) // up
         {
-            Debug.Log(v_raycastHit.collider.name);
+            detectionPoints.Add(u_raycastHit.point, u_raycastHit);
+        }
+
+    }
+
+    void storePoint() {
+        if (detectionPoints.Keys.Count < 1)
+            return;
+       checkpoints = new Vector3[detectionPoints.Keys.Count]; 
+       checkHits = new RaycastHit[detectionPoints.Values.Count];
+        detectionPoints.Keys.CopyTo(checkpoints, 0);// convert dictionary to array (Vector3)
+        detectionPoints.Values.CopyTo(checkHits, 0); // convert dictionary to array ( raycasthit)
+        theClosestPoint = checkpoints[0];
+        theClosestHit = checkHits[0];
+
+
+        // Debug.Log(checkpoints.Length);
+      if(checkpoints.Length>1)
+       FindTheClosetPoint();
+
+    }
+
+   void FindTheClosetPoint( ) {
+        Vector3 c = character.transform.position;
+        for (int i = 0; i < checkpoints.Length; i++)
+        {
+            Vector3 cpt = checkpoints[0] - c; // suppose the first vector is the nearest distance between the character
+            Vector3 pts = checkpoints[i] - c;  //  another vector
+            float closestValue = cpt.magnitude; 
+            float anotherValue = pts.magnitude;
+            if (closestValue > anotherValue) // when the closest vector is larger than another point (detectionPoint to character)
+            {
+                theClosestPoint = checkpoints[i]; // then the closest is another vector
+                theClosestHit = checkHits[i];   
+            }
+            Debug.Log("closest"+closestValue);
+            Debug.Log("another" + anotherValue);
+
         }
 
     }
@@ -132,25 +181,28 @@ public class RockClimb : MonoBehaviour {
 
     }
     
-    void GetClimbPosition( RaycastHit hit) {
+    void GetClimbPosition() {
+        if (detectionPoints.Keys.Count < 1)
+        {
+            character.transform.position = currentPosition;
+        }
+        else
+        {
 
-        currentPosition = character.transform.position;
-        anim.CrossFadeInFixedTime("climb_idle", 0.2f);
-        targetPosition = hit.point + (hit.normal * offsetFromWall); // adjusting the distance between the normal surface of   
+            anim.CrossFadeInFixedTime("climb_idle", 0.2f);
+            targetPosition = theClosestPoint + theClosestHit.normal * offsetFromWall;
 
-        Vector3 tp = Vector3.Lerp(currentPosition,targetPosition, 0.5f);
-         character.transform.position = tp;
+            Vector3 tp = Vector3.Lerp(character.transform.position, targetPosition, 0.5f);
+            character.transform.position = tp;
+            float angle = RotateAngle(-theClosestHit.normal); // return the angle for rotating to the wall
+            character.transform.rotation = Quaternion.LookRotation(-theClosestHit.normal);
 
-        float angle = RotateAngle(- hit.normal); // return the angle for rotating to the wall
-        Debug.Log(angle);
-
-        character.transform.rotation = Quaternion.LookRotation(-hit.normal);
-        
+        }
+       // Debug.Log(angle);
 
     }
 
-    
-
+  
     void ClimbUp()
     {
         
